@@ -9,6 +9,9 @@ class ControladorSemaforos:
         self.indice_actual = 0  # Semáforo que tiene el turno
         self.estado = "VERDE"   # Estado global del semáforo actual
         self.en_transicion = None  # Índice del semáforo que debe pasar de amarillo a verde
+        self.en_espera = False     # Bandera de espera de 1 segundo
+        self.tiempo_espera = 1    # Tiempo de espera en segundos
+        self.contador_espera = 0
         self._inicializar_semaforos()
 
     def _inicializar_semaforos(self):
@@ -19,6 +22,8 @@ class ControladorSemaforos:
             else:
                 s.set_estado("ROJO", self.tiempo_rojo)
         self.en_transicion = None  # Reiniciar transición al inicializar
+        self.en_espera = False
+        self.contador_espera = 0
 
     def actualizar_distancias(self, distancias):
         for i, s in enumerate(self.semaforos):
@@ -33,7 +38,18 @@ class ControladorSemaforos:
                 if sem.tiempo_restante == 0:
                     sem.set_estado("VERDE", self.tiempo_verde)
                     self.en_transicion = None
-            # No avanzar el semáforo actual mientras hay transición
+            return
+
+        # Si estamos en espera, solo decrementamos el contador
+        if self.en_espera:
+            self.contador_espera -= 1
+            if self.contador_espera <= 0:
+                # Termina la espera, inicia el siguiente semáforo en amarillo
+                siguiente = self._siguiente_semaforo()
+                self.indice_actual = siguiente
+                self.semaforos[self.indice_actual].set_estado("AMARILLO", self.tiempo_amarillo)
+                self.en_transicion = self.indice_actual
+                self.en_espera = False
             return
 
         actual = self.semaforos[self.indice_actual]
@@ -45,10 +61,9 @@ class ControladorSemaforos:
                     actual.set_estado("AMARILLO", self.tiempo_amarillo)
                 elif actual.estado == "AMARILLO":
                     actual.set_estado("ROJO", self.tiempo_rojo)
-                    siguiente = self._siguiente_semaforo()
-                    self.indice_actual = siguiente
-                    self.semaforos[self.indice_actual].set_estado("AMARILLO", self.tiempo_amarillo)
-                    self.en_transicion = self.indice_actual
+                    # Iniciar espera antes de pasar al siguiente semáforo
+                    self.en_espera = True
+                    self.contador_espera = self.tiempo_espera
 
         # Asegurarse que los demás semáforos estén en rojo
         for i, s in enumerate(self.semaforos):
