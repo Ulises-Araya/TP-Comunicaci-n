@@ -6,12 +6,13 @@ class ControladorSemaforos:
         self.tiempo_amarillo = 2
         self.tiempo_rojo = 15
         self.tiempo_verde = 5
-        self.indice_actual = 0  # Semáforo que tiene el turno
-        self.estado = "VERDE"   # Estado global del semáforo actual
-        self.en_transicion = None  # Índice del semáforo que debe pasar de amarillo a verde
-        self.en_espera = False     # Bandera de espera de 1 segundo
-        self.tiempo_espera = 1    # Tiempo de espera en segundos
+        self.indice_actual = 0
+        self.estado = "VERDE"
+        self.en_transicion = None
+        self.en_espera = False
+        self.tiempo_espera = 1
         self.contador_espera = 0
+        self.cola_prioridad = []  # Cola de prioridad por orden de llegada
         self._inicializar_semaforos()
 
     def _inicializar_semaforos(self):
@@ -24,10 +25,18 @@ class ControladorSemaforos:
         self.en_transicion = None  # Reiniciar transición al inicializar
         self.en_espera = False
         self.contador_espera = 0
+        self.cola_prioridad = []
 
     def actualizar_distancias(self, distancias):
         for i, s in enumerate(self.semaforos):
             s.set_distancia(distancias[i])
+        # Actualizar la cola de prioridad por orden de llegada
+        for i, s in enumerate(self.semaforos):
+            if s.distancia < 30 and i not in self.cola_prioridad and i != self.indice_actual:
+                self.cola_prioridad.append(i)
+            # Si ya no hay presencia, quitar de la cola
+            if s.distancia >= 30 and i in self.cola_prioridad:
+                self.cola_prioridad.remove(i)
 
     def tick(self):
         # Si hay un semáforo en transición (amarillo->verde), solo avanza ese
@@ -44,7 +53,6 @@ class ControladorSemaforos:
         if self.en_espera:
             self.contador_espera -= 1
             if self.contador_espera <= 0:
-                # Termina la espera, inicia el siguiente semáforo en amarillo
                 siguiente = self._siguiente_semaforo()
                 self.indice_actual = siguiente
                 self.semaforos[self.indice_actual].set_estado("AMARILLO", self.tiempo_amarillo)
@@ -72,13 +80,12 @@ class ControladorSemaforos:
                     s.set_estado("ROJO", self.tiempo_rojo)
 
     def _siguiente_semaforo(self):
-        # Prioridad: si solo uno tiene presencia (<30cm), darle el turno
-        presentes = [i for i, s in enumerate(self.semaforos) if s.distancia < 30]
-        if len(presentes) == 1:
+        # Si hay alguien en la cola de prioridad, atenderlo primero
+        if self.cola_prioridad:
+            return self.cola_prioridad.pop(0)
+        # Si nadie en la cola, buscar si hay presencia en algún semáforo (excepto el actual)
+        presentes = [i for i, s in enumerate(self.semaforos) if s.distancia < 30 and i != self.indice_actual]
+        if presentes:
             return presentes[0]
-        elif len(presentes) > 1:
-            # Si varios tienen presencia, sigue el orden de llegada (circular)
-            return (self.indice_actual + 1) % len(self.semaforos)
-        else:
-            # Nadie presente, ciclo normal
-            return (self.indice_actual + 1) % len(self.semaforos)
+        # Si nadie presente, ciclo normal
+        return (self.indice_actual + 1) % len(self.semaforos)
